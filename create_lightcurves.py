@@ -12,14 +12,15 @@ import nmma.em.utils as utils
 
 
 class GRBKN_pop(object):
-    def __init__(self, data_path='./lc',priors, sample_times, n_kn_component, n_lc=1000, filters = ["u", "g", "r", "i", "z", "y", "J", "H", "K"]):
+    def __init__(self,priors, sample_times, threshold=None,n_kn_component=1, data_path='./lc', n_lc=1000, filters = ["u", "g", "r", "i", "z", "y", "J", "H", "K"],**kwargs):
         self.priors = priors #dictionary with parameters distributions 
         self.sample_times = sample_times
         self.n_kn_component = n_kn_component
         self.n_lc = n_lc
         self.filters = filters
         self.data_path = data_path
-        if not os.path.exist(self.data_path):
+        self.threshold=threshold
+        if not os.path.exists(self.data_path):
             os.mkdir('./lc')
     def KN_lc(self, sample_times, params, treshold=None):
         #definire treshold
@@ -59,59 +60,59 @@ class GRBKN_pop(object):
         _, mag = grb_model.generate_lightcurve(sample_times, params)
         return mag
     
-    def run():
+    def run(self):
         ln10 = np.log(10)
         #Loop starts
         n = 0
-        while n!=n_lc:
+        while n!=self.n_lc:
             n+=1
             #Check probability distributions
             #Opacity
-            if np.shape(self.prior['log10_kappa_r'])[1]==2:          
-                k = np.random.choice(self.prior['log10_kappa_r'][:,0], p=self.prior['log10_kappa_r'][:,1])
+            if self.priors['log10_kappa_r'].ndim==2:          
+                k = np.random.choice(self.priors['log10_kappa_r'][:,0], p=self.priors['log10_kappa_r'][:,1])
             else:
-                k = np.random.choice(self.prior['log10_kappa_r'][:,0], p=None)
+                k = np.random.choice(self.priors['log10_kappa_r'], p=None)
             #Ejecta mass
-            if np.shape(self.prior['log10_Mej'])[1]==2:
-                Mej = np.random.choice(self.prior['log10_Mej'][:,0], p=self.prior['log10_Mej'][:,1])
+            if self.priors['log10_Mej'].ndim==2:
+                Mej = np.random.choice(self.priors['log10_Mej'][:,0], p=self.priors['log10_Mej'][:,1])
             else:
-                Mej = np.random.choice(self.prior['log10_Mej'][:,0], p=None)
+                Mej = np.random.choice(self.priors['log10_Mej'], p=None)
             #Ejecta velocity
-            if np.shape(self.prior['log10_vej'])[1]==2:
-                vej = np.random.choice(self.prior['log10_vej'][:,0], p=self.prior['log10_vej'][:,1])
+            if self.priors['log10_vej'].ndim==2:
+                vej = np.random.choice(self.priors['log10_vej'][:,0], p=self.priors['log10_vej'][:,1])
             else:
-                vej = np.random.choice(self.prior['log10_vej'][:,0], p=None)
+                vej = np.random.choice(self.priors['log10_vej'], p=None)
             #Luminosity distance
-            if np.shape(self.prior['DL'])[1]==2:
-                ld = np.random.choice(self.prior['DL'][:,0], p=self.prior['DL'][:,1])
+            if self.priors['luminosity_distance'].ndim==2:
+                ld = np.random.choice(self.priors['luminosity_distance'][:,0], p=self.priors['luminosity_distance'][:,1])
             else:
-                ld = np.random.choice(self.prior['DL'][:,0], p=None)        
+                ld = np.random.choice(self.priors['luminosity_distance'], p=None)        
             #parameters are set for the simulation
             params = {
                 "luminosity_distance": ld,
-                "beta": self.prior['beta'],
+                "beta": self.priors['beta'],
                 "log10_kappa_r": k,
-                "KNtimeshift": self.prior['KNtimeshift'],
+                "KNtimeshift": self.priors['KNtimeshift'],
                 "log10_vej": vej,
                 "log10_Mej": Mej,
-                "Ebv": self.prior['Ebv'],
-                "log_likelihood": self.prior['log_likelihood'],
-                "log_prior": self.prior['log_prior'],
-                'jetType':self.prior['jetType'],
-                "inclination_EM":self.prior['inclination_EM'],
-                "log10_E0": self.prior['log10_E0'].,
-                "thetaCore": self.prior['thetaCore'],
-                "thetaWing": self.prior['thetaWing'],
-                "log10_n0": self.prior['log10_n0'],
-                'p':           self.prior['p'],    # electron energy distribution index
-                "log10_epsilon_e":   self.prior['log10_epsilon_e'],    # epsilon_e
-                "log10_epsilon_B":   self.prior['log10_epsilon_B'],   # epsilon_B
-                'xi_N':        self.prior['xi_N'],
+                "Ebv": self.priors['Ebv'],
+                "log_likelihood": self.priors['log_likelihood'],
+                "log_prior": self.priors['log_prior'],
+                'jetType':self.priors['jetType'],
+                "inclination_EM":self.priors['inclination_EM'],
+                "log10_E0": self.priors['log10_E0'],
+                "thetaCore": self.priors['thetaCore'],
+                "thetaWing": self.priors['thetaWing'],
+                "log10_n0": self.priors['log10_n0'],
+                'p':           self.priors['p'],    # electron energy distribution index
+                "log10_epsilon_e":   self.priors['log10_epsilon_e'],    # epsilon_e
+                "log10_epsilon_B":   self.priors['log10_epsilon_B'],   # epsilon_B
+                'xi_N':        self.priors['xi_N'],
                 }
             #lc generation
-            mag_kn = self.KN_lc(sample_times, params, treshold=None)
+            mag_kn = self.KN_lc(sample_times, params, self.threshold)
             mag_grb = self.GRB_lc(sample_times, params)
-            total_mag = pd.DataFrame(columns=filters)
+            total_mag = pd.DataFrame(columns=self.filters)
             for f in self.filters:
                 total_mag[f] = (
                     -5.0
@@ -120,7 +121,7 @@ class GRBKN_pop(object):
                         [-2.0 / 5.0 * ln10 * mag_grb[f], -2.0 / 5.0 * ln10 * mag_kn[f]],
                         axis=0,
                     )
-                    / ln10
+                    / ln10)
             total_mag['time'] = self.sample_times
-            total_mag.to_csv(np.join([self.data_path,'/Mej{}_vej{}_k{}.csv'.format(Mej,vej,k)]))
+            total_mag.to_csv(self.data_path+'/Mej{0:.2f}_vej{1:.2f}_k{2:.2f}.csv'.format(Mej,vej,k))
         return print('End of the simulation!')

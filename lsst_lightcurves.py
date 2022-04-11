@@ -8,21 +8,38 @@ from lsst.sims.photUtils import Dust_values
 from lsst.sims.photUtils import Bandpass, SignalToNoise, PhotometricParameters, calcMagError_m5, calcGamma
 
 class GRBKN_obs(metrics.BaseMetric):
-    def __init__(self, metricName='KNePopMetric', mjdCol='observationStartMJD', m5Col='fiveSigmaDepth',
-                 filterCol='filter', nightCol='night', ptsNeeded=2, file_list=None, mjd0=59853.5,
-                 data_path='./lc', obs_path='./obs_lc',**kwargs):
+    def __init__(self, metricName='GRBKN_obs', mjdCol='observationStartMJD', 
+                 RACol='fieldRA', DecCol='fieldDec',filterCol='filter', m5Col='fiveSigmaDepth', 
+                 exptimeCol='visitExposureTime',nightCol='night',vistimeCol='visitTime', ptsNeeded=2, mjd0=59853.5,
+                 data_path='./lc', obs_path='./obs_lc',surveyduration=10,nPhaseCheck=1,Filter_selection = False,**kwargs):
         maps = ['DustMap']
         self.mjdCol = mjdCol
         self.m5Col = m5Col
         self.filterCol = filterCol
+        self.RACol = RACol
+        self.DecCol = DecCol
+        self.exptimeCol = exptimeCol
+        self.nightCol = nightCol
+        self.vistimeCol = vistimeCol
         self.nightCol = nightCol
         self.ptsNeeded = ptsNeeded
         self.data_path = data_path
         self.obs_path = obs_path
-        if not os.path.exist(self.obs_path):
+        self.surveyduration=surveyduration
+        self.mjd0=mjd0
+        self.nPhaseCheck=nPhaseCheck
+        self.Filter_selection=Filter_selection
+        if not os.path.exists(self.obs_path):
             os.mkdir('./obs_lc')
         self.bandpass = Bandpass(wavelen=np.array([480.2,623.1,754.2]),
                                  sb=np.array([0.1,0.1,0.1]),wavelen_min=380, wavelen_max=850, wavelen_step=10)
+        super(GRBKN_obs, self).__init__(col=[self.mjdCol,self.m5Col, self.filterCol,self.RACol,
+                                                                   self.DecCol,self.exptimeCol,self.nightCol,
+                                                                   self.vistimeCol],
+                                                       metricDtype='object', units='',
+                                                       metricName=metricName, **kwargs)
+        self.bandpass = Bandpass(wavelen=np.array([480.2,623.1,754.2]),sb=np.array([0.1,0.1,0.1]),wavelen_min=380, wavelen_max=850, wavelen_step=10)
+        self.photparam = PhotometricParameters() 
     def coadd(self, data):
         """
         Method to coadd data per band and per night
@@ -66,10 +83,8 @@ class GRBKN_obs(metrics.BaseMetric):
             The data read from the ascii text file, in a numpy structured array with columns
             'ph' (phase / epoch, in days), 'mag' (magnitude), 'flt' (filter for the magnitude).
         """
-        if not os.path.isfile(asciifile):
-            raise IOError('Could not find lightcurve file %s' % (file))
         self.lcv_template = pd.read_csv(file)
-        
+        self.transDuration = self.lcv_template['time'].max() - self.lcv_template['time'].min()
     def make_lightCurve(self, time, filters):
         """Turn lightcurve definition into magnitudes at a series of times.
         Parameters
@@ -84,11 +99,11 @@ class GRBKN_obs(metrics.BaseMetric):
              The magnitudes of the transient at the times and in the filters of the observations.
         """
         flt = np.unique(filters)
-        lcMags = pd.DataFrame(columns = flt)
+        lcMags = np.zeros(time.size, dtype=float)
         for key in set(flt):
             # Interpolate the lightcurve template to the times of the observations, in this filter.
             temp_ph=np.array(self.lcv_template['time'], float)
-            lcMags[key] = np.interp(time, temp_ph,
+            lcMags[filters==key] = np.interp(time[filters==key], temp_ph,
                                         np.array(self.lcv_template[key], float))
         return lcMags
     
@@ -100,53 +115,66 @@ class GRBKN_obs(metrics.BaseMetric):
         photparam = self.photparam
         calcSNR_m5=np.vectorize(SignalToNoise.calcSNR_m5)
         
+        obs_filter = dataSlice[self.filterCol]
+        obs = dataSlice[self.mjdCol]          
+        obs_m5 = dataSlice[self.m5Col]
+        
         lcfile = glob.glob(self.data_path+'/*.csv')
         for file in lcfile:
+            print(file)
             lcname = file.split('/')[-1]
             self.read_lightCurve(file)
-            lcMags_ = self.make_lightCurve(lcEpoch, obs_filter[indexlc])
-            #broadcast the lc in the proper format for the MAF
-            lcMags = np.array([np.concatenate(lcMags_.values), 
-                               np.concatenate([np.repeat(k, np.size(lcMags_[k])) for k in lcMags_.columns])],
-                 dtype=[('mag', 'f4'), ('flt', 'utf-8')])
-            lcSNR,_ = calcSNR_m5(lcMags, bandpass, obs_m5[indexlc], photparam)
-            lcpoints_AboveThresh = np.zeros(len(lcSNR), dtype=bool) 
+            tshifts = np.arange(self.nPhaseCheck) * self.transDuration / float(self.nPhaseCheck)
+            lcNumberStart = -1 * np.floor((dataSlice[self.mjdCol].min() - self.mjd0) / self.transDuration)
+            for i,tshift in enumerate(tshifts):
+                # Calculate the time/epoch for each lightcurve.
+                lcEpoch = (obs-self.mjd0  + tshift) % self.transDuration
+                # Identify the observations which belong to each distinct light curve.
+                lcNumber = np.floor((obs-self.mjd0 )  / self.transDuration) + lcNumberStart
+                lcNumberStart = lcNumber.max()
+                ulcNumber = np.unique(lcNumber)
+                lcLeft = np.searchsorted(lcNumber, ulcNumber, side='left')
+                lcRight = np.searchsorted(lcNumber, ulcNumber, side='right')
+                lcMags = self.make_lightCurve(lcEpoch, obs_filter) 
+                lcSNR,_ = calcSNR_m5(lcMags, bandpass, obs_m5, photparam)
+                lcpoints_AboveThresh = np.zeros(np.shape(lcSNR), dtype=bool) 
 
-            nobj = np.array([0,0],[('detected','i4'),('undetected','i4')])            
-            for f in np.unique(obs_filter[indexlc]):                    
-                filtermatch = np.where(obs_filter[indexlc] == f)
-                lcpoints_AboveThresh[filtermatch] = np.where(lcMags_temp[filtermatch] <= obs_m5[indexlc][filtermatch],True,lcpoints_AboveThresh[filtermatch])
-            Dpoints = np.sum(lcpoints_AboveThresh) #counts the number of detected points
-            if self.Filter:
-                nfilt_det = []
-                for f in self.nFilters:                    
-                    filtermatch = np.where(obs_filter[indexlc] == f)                               
-                    if Dpoints[filtermatch]>=self.ptsNeeded: nfilt_det.append(True)
+                nobj = np.array([0,0],[('detected','i4'),('undetected','i4')])            
+                for f in np.unique(obs_filter):                    
+                    filtermatch = np.where(obs_filter == f)
+                    lcpoints_AboveThresh[filtermatch] = np.where(lcMags[filtermatch] <= obs_m5[filtermatch],True,lcpoints_AboveThresh[filtermatch])
+                
+                for j,(lcN, le, ri) in enumerate(zip(ulcNumber, lcLeft, lcRight)):
+                    if le == ri:
+                        # Skip the rest of this loop, go on to the next lightcurve.
+                        continue
+                    Dpoints = np.sum(lcpoints_AboveThresh[le:ri], axis= 0) #counts the number of detected points
+                    if self.Filter_selection:
+                        nfilt_det = np.zeros(np.shape(lcSNR)[0], dtype=bool)
+                        for f in self.nFilters:                    
+                            filtermatch = np.where(obs_filter == f)  
+                            Dpoints = np.sum(lcpoints_AboveThresh[filtermatch],axis=0)
+                            nfilt_det= np.where(Dpoints>=self.ptsNeeded,True,nfilt_det)
+                        nobj['detected']+=np.sum(nfilt_det)
+                        nobj['undetected']+= np.size(nfilt_det)-np.sum(nfilt_det)
 
-                if any(nfilt_det): 
-                    nobj['detected']+=1
-                else:
-                    nobj['undetected']+=1
+                    else:
+                        nobj['detected']+=np.sum(np.where(Dpoints>self.ptsNeeded))
+                        nobj['undetected']+=np.sum(np.where(Dpoints<self.ptsNeeded))
 
-            else:
-                if Dpoints>=self.ptsNeeded: 
-                    nobj['detected']+=1
-                else:
-                    nobj['undetected']+=1
-
-                # producing a file of LSST observed lightcurves
-                mag = lcMags['mag'][lcpoints_AboveThresh]
-                filters = lcMags['flt'][lcpoints_AboveThresh]
-                epochs = obs[indexlc][lcpoints_AboveThresh][filtermatch]
-                snr = lcSNR[lcpoints_AboveThresh][filtermatch]
+                    # producing a file of LSST observed lightcurves
+                mag = lcMags[lcpoints_AboveThresh]
+                filters = obs_filter[lcpoints_AboveThresh]
+                epochs = lcEpoch[lcpoints_AboveThresh]
+                snr = lcSNR[lcpoints_AboveThresh]
                 gamma = np.array([calcGamma(self.bandpass, m, self.photparam) 
-                                  for m in obs_m5[indexlc][filtermatch]])
-                merr, _= calcMagError_m5(mag, bandpass, obs_m5[indexlc], 
+                                  for m in obs_m5])
+                merr, _= calcMagError_m5(mag, bandpass, obs_m5, 
                                             photparam, gamma=gamma)
 
-                total_lc = pd.DataFrame([epochs,
+                total_lc = pd.DataFrame(np.array([epochs,
                                         mag,
                                         merr,
-                                        filters], columns=['time', 'mag','merr','filter']).to_csv(np.join([self.obs_path+'/obs_',
-                                                                                                          lcname]))
-            return nobj
+                                        filters]).T, columns=['time', 'mag','merr','filter']).to_csv(self.obs_path+'/obs_{}_'.format(i)+
+                                                                                                          lcname)
+        return nobj

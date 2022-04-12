@@ -121,7 +121,7 @@ class GRBKN_pop(object):
                         [-2.0 / 5.0 * ln10 * mag_grb[f], -2.0 / 5.0 * ln10 * mag_kn[f]],
                         axis=0,
                     )
-                    / ln10)
+                    / ln10) +5*np.log10(ld*1e6/10)
             total_mag['time'] = self.sample_times
             total_mag.to_csv(self.data_path+'/Mej{0:.2f}_vej{1:.2f}_k{2:.2f}.csv'.format(Mej,vej,k))
         return print('End of the simulation!')

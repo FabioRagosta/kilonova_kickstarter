@@ -116,5 +116,5 @@ class fit_lc(object):
                 label=filename,
                 seed=self.seed
                 )
-            result.save_posterior_samples(filename='prior_'+filename+'.pkl', extension='pickle')
+            result.save_posterior_samples(filename='prior_'+filename+'.dat')
         return print('fit completes!')

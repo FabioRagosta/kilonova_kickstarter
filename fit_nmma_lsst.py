@@ -17,6 +17,23 @@ from nmma.em.utils import getFilteredMag
 
 
 class fit_lc(object):
+        """
+        Class object, observed lightcurve from LSST observing constraints
+        Parameters
+        ------------
+            model_names= list of light curves models from nmma (DEFAULT: ['TrPi2018','Me2017'] )
+            sample_times= array with the light curve phases      (example = tmin, tmax, dt = 0.5, 20.0, 0.5
+                                                                sample_times = np.arange(tmin, tmax + dt, dt))
+            threshold= the threshold between the opacity of the the components if n_kn_component >1 (DEFAULT = None)
+            priors_path = path of the priors file (DEFAULT = '~/nmma/priors')
+            data_path = path where the save the csv of the observed light curves   (DEFAULT = ./obs_lc)
+            output = path where the save the posteriors file   (DEFAULT = ./posterior)
+            detection_limit = number of light curves to simulate (DEFAULT = {'u':24,'g':25,'r':25,'i':24,'z':23,'y':22})
+             
+        Returns
+        -------
+            files with the posterior distribution of the parameters from the fit
+        """
     def __init__(self, model_names = ['TrPi2018','Me2017'],data_path = './obs_lc',
                  priors_path = '/Users/fabioragosta/nmma/priors',sample_times=sample_times, 
                  Ebv_max=0.5724, error_budget=1.0, seed=42,output='./posteriors',

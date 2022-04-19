@@ -22,7 +22,9 @@ class GRBKN_obs(metrics.BaseMetric):
             DecCol= Dec column name from Opsim database      (DEFAULT = fieldDec)
             surveyduration= Survey Duration      (DEFAULT = 10)
             mjd0= Survey start date      (DEFAULT = 59853.5)
-            Filter_selection = 
+            nFilter = number of filters needed for an object to be detected (DEFAULT= None) 
+            ptsNeeded = number of points on the light curve needed for an object to be detected (DEFAULT= 2)
+            snrlim = signal to noise ratio of the detection
         Returns
         -------
             nobj: number of detected lightcurves
@@ -31,7 +33,7 @@ class GRBKN_obs(metrics.BaseMetric):
     def __init__(self, metricName='GRBKN_obs', mjdCol='observationStartMJD', 
                  RACol='fieldRA', DecCol='fieldDec',filterCol='filter', m5Col='fiveSigmaDepth', 
                  exptimeCol='visitExposureTime',nightCol='night',vistimeCol='visitTime', snrlim=5, ptsNeeded=2, mjd0=59853.5,
-                 data_path='./lc', obs_path='./obs_lc',surveyduration=10,Filter_selection = False,nFilter=1,**kwargs):
+                 data_path='./lc', obs_path='./obs_lc',surveyduration=10,nFilter=None,**kwargs):
         maps = ['DustMap']
         self.mjdCol = mjdCol
         self.m5Col = m5Col
@@ -169,7 +171,7 @@ class GRBKN_obs(metrics.BaseMetric):
                     # Skip the rest of this loop, go on to the next lightcurve.
                     continue
                 Dpoints = np.sum(lcpoints_AboveThresh[le:ri], axis= 0) #counts the number of detected points
-                if self.Filter_selection:
+                if self.nFilter:
                     nfilt_det = np.zeros(np.size(np.unique(obs_filter)), dtype=bool)
                     for f in np.unique(obs_filter):                    
                         filtermatch = np.where(obs_filter == f)  

@@ -12,6 +12,41 @@ import nmma.em.utils as utils
 
 
 class GRBKN_pop(object):
+        """
+        Class object, observed lightcurve from LSST observing constraints
+        Parameters
+        ------------
+            priors= dictionary with model parameters. (example = {"luminosity_distance": np.random.uniform(30,1000,10),
+                    "beta": 3.6941470839046575,
+                    "log10_kappa_r":np.random.uniform(-9,-1,10),
+                    "KNtimeshift": 0.383516607107672,
+                    "log10_vej": np.random.uniform(-3,0,10),
+                    "log10_Mej": np.random.uniform(-3,0,10),
+                    "Ebv": 0.0,
+                    "log_likelihood": -309.52597696948493,
+                    "log_prior": -10.203592144986466,
+                    'jetType':0,
+                    "inclination_EM":0,
+                    "log10_E0": 50.,
+                    "thetaCore": 0.1,
+                    "thetaWing": 0.1,
+                    "log10_n0": -1,
+                    'p':           2.2,    # electron energy distribution index
+                    "log10_epsilon_e":   -1,    # epsilon_e
+                    "log10_epsilon_B":   -2,   # epsilon_B
+                    'xi_N':        1.0,
+                })
+            sample_times= array with the light curve phases      (example = tmin, tmax, dt = 0.5, 20.0, 0.5
+                                                                sample_times = np.arange(tmin, tmax + dt, dt))
+            threshold= the threshold between the opacity of the the components if n_kn_component >1 (DEFAULT = None)
+            n_kn_component = numeber of the KN components (DEFAULT = 1)
+            data_path = path where the save the csv of the simulated light curves(DEFAULT = ./lc)
+            n_lc = number of light curves to simulate (DEFAULT = 1000)
+             
+        Returns
+        -------
+            csv files with the simulated lightcurves
+        """
     def __init__(self,priors, sample_times, threshold=None,n_kn_component=1, data_path='./lc', n_lc=1000, filters = ["u", "g", "r", "i", "z", "y", "J", "H", "K"],**kwargs):
         self.priors = priors #dictionary with parameters distributions 
         self.sample_times = sample_times

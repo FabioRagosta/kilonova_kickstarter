@@ -200,19 +200,19 @@ class GRBKN_obs(metrics.BaseMetric):
                 flag_det = np.zeros(np.size(lcpoints_AboveThresh[le:ri]))
                 flag_det = np.where(lcpoints_AboveThresh[le:ri]==True,1,flag_det)
                 mag = obs_m5.copy()
-                mag[lcpoints_AboveThresh[le:ri]] = lcMags[le:ri][lcpoints_AboveThresh[le:ri]]
+                mag[le:ri][lcpoints_AboveThresh[le:ri]] = lcMags[le:ri][lcpoints_AboveThresh[le:ri]]
                 filters = obs_filter[le:ri]#[lcpoints_AboveThresh[le:ri]]
                 epochs = obs[le:ri]#[lcpoints_AboveThresh[le:ri]]
                 snr = lcSNR[le:ri]#[lcpoints_AboveThresh[le:ri]]
                 gamma = np.array([calcGamma(self.bandpass, m, self.photparam) 
                                   for m in obs_m5[le:ri]])#[lcpoints_AboveThresh[le:ri]]])
-                merr, _= calcMagError_m5(mag, bandpass, obs_m5[le:ri],#[lcpoints_AboveThresh[le:ri]], 
+                merr, _= calcMagError_m5(mag[le:ri], bandpass, obs_m5[le:ri],#[lcpoints_AboveThresh[le:ri]], 
                                             photparam, gamma=gamma)
 
                 if np.size(mag)>self.ptsNeeded:
                     total_lc = pd.DataFrame(np.array([epochs[snr>self.snrlim],
                                             filters[snr>self.snrlim],
-                                            mag[snr>self.snrlim],
+                                            mag[le:ri][snr>self.snrlim],
                                             merr[snr>self.snrlim],
                                             flag_det[snr>self.snrlim]]).T, columns=['time','filter', 'mag','merr','flag']).to_csv(self.obs_path+'/obs_{}_'.format(j)+
                                                                                                               lcname)

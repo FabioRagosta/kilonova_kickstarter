@@ -22,9 +22,7 @@ class GRBKN_obs(metrics.BaseMetric):
             DecCol= Dec column name from Opsim database      (DEFAULT = fieldDec)
             surveyduration= Survey Duration      (DEFAULT = 10)
             mjd0= Survey start date      (DEFAULT = 59853.5)
-            nFilter = number of filters needed for an object to be detected (DEFAULT= None) 
-            ptsNeeded = number of points on the light curve needed for an object to be detected (DEFAULT= 2)
-            snrlim = signal to noise ratio of the detection
+            Filter_selection = 
         Returns
         -------
             nobj: number of detected lightcurves
@@ -33,7 +31,7 @@ class GRBKN_obs(metrics.BaseMetric):
     def __init__(self, metricName='GRBKN_obs', mjdCol='observationStartMJD', 
                  RACol='fieldRA', DecCol='fieldDec',filterCol='filter', m5Col='fiveSigmaDepth', 
                  exptimeCol='visitExposureTime',nightCol='night',vistimeCol='visitTime', snrlim=5, ptsNeeded=2, mjd0=59853.5,
-                 data_path='./lc', obs_path='./obs_lc',surveyduration=10,nFilter=None,**kwargs):
+                 data_path='./lc', obs_path='./obs_lc',surveyduration=10,Filter_selection = False,nFilter=1,**kwargs):
         maps = ['DustMap']
         self.mjdCol = mjdCol
         self.m5Col = m5Col
@@ -53,7 +51,7 @@ class GRBKN_obs(metrics.BaseMetric):
         self.nFilter=nFilter
         self.snrlim = snrlim
         if not os.path.exists(self.obs_path):
-            os.mkdir('./obs_lc')
+            os.mkdir(self.obs_path)
         self.bandpass = Bandpass(wavelen=np.array([480.2,623.1,754.2]),
                                  sb=np.array([0.1,0.1,0.1]),wavelen_min=380, wavelen_max=850, wavelen_step=10)
         super(GRBKN_obs, self).__init__(col=[self.mjdCol,self.m5Col, self.filterCol,self.RACol,
@@ -171,7 +169,7 @@ class GRBKN_obs(metrics.BaseMetric):
                     # Skip the rest of this loop, go on to the next lightcurve.
                     continue
                 Dpoints = np.sum(lcpoints_AboveThresh[le:ri], axis= 0) #counts the number of detected points
-                if self.nFilter:
+                if self.Filter_selection:
                     nfilt_det = np.zeros(np.size(np.unique(obs_filter)), dtype=bool)
                     for f in np.unique(obs_filter):                    
                         filtermatch = np.where(obs_filter == f)  
@@ -180,40 +178,46 @@ class GRBKN_obs(metrics.BaseMetric):
                             nfilt_det[np.where(nfilt_det==f)]= True
                     if nfilt_det>= self.nFilter:
                         nobj['detected']+=1
+                        save_lc=True 
                     else:
                         nobj['undetected']+=1
+                        save_lc=False
 
                 else:
                     if Dpoints>self.ptsNeeded:
                         nobj['detected']+=1
+                        save_lc=True 
                     else:
                         nobj['undetected']+=1
+                        save_lc=False
+                        
+                if save_lc:
+                    """ 
+                     The file of LSST observed lightcurves is produced if le != ri, the output contains:
+                     flag_det: 0 if at the epoch there is no detection, 1 if at the epoch there is a detection
+                     mag: the magnitude estimated at the given epoch
+                     epoch: mjd of the observation
+                     filters: filter of the observation at the given epoch
+                     merr: uncertainty on the magnitude estimated at the given epoch
+                    """
+                    flag_det = np.zeros(np.size(lcpoints_AboveThresh[le:ri]))
+                    flag_det = np.where(lcpoints_AboveThresh[le:ri]==True,1,flag_det)
+                    mag = obs_m5.copy()
+                    mag[le:ri] = lcMags[le:ri]#[lcpoints_AboveThresh[le:ri]]
+                    filters = obs_filter[le:ri]#[lcpoints_AboveThresh[le:ri]]
+                    epochs = lcEpoch[le:ri]+ self.mjd0+ lcN*self.transDuration#[lcpoints_AboveThresh[le:ri]]
+                    snr = lcSNR[le:ri]#[lcpoints_AboveThresh[le:ri]]
+                    gamma = np.array([calcGamma(self.bandpass, m, self.photparam) 
+                                      for m in obs_m5[le:ri]])#[lcpoints_AboveThresh[le:ri]]])
+                    merr, _= calcMagError_m5(mag[le:ri], bandpass, obs_m5[le:ri],#[lcpoints_AboveThresh[le:ri]], 
+                                                photparam, gamma=gamma)
 
-                """ 
-                 The file of LSST observed lightcurves is produced if le != ri, the output contains:
-                 flag_det: 0 if at the epoch there is no detection, 1 if at the epoch there is a detection
-                 mag: the magnitude estimated at the given epoch
-                 epoch: mjd of the observation
-                 filters: filter of the observation at the given epoch
-                 merr: uncertainty on the magnitude estimated at the given epoch
-                """
-                flag_det = np.zeros(np.size(lcpoints_AboveThresh[le:ri]))
-                flag_det = np.where(lcpoints_AboveThresh[le:ri]==True,1,flag_det)
-                mag = obs_m5.copy()
-                mag[le:ri][lcpoints_AboveThresh[le:ri]] = lcMags[le:ri][lcpoints_AboveThresh[le:ri]]
-                filters = obs_filter[le:ri]#[lcpoints_AboveThresh[le:ri]]
-                epochs = obs[le:ri]#[lcpoints_AboveThresh[le:ri]]
-                snr = lcSNR[le:ri]#[lcpoints_AboveThresh[le:ri]]
-                gamma = np.array([calcGamma(self.bandpass, m, self.photparam) 
-                                  for m in obs_m5[le:ri]])#[lcpoints_AboveThresh[le:ri]]])
-                merr, _= calcMagError_m5(mag[le:ri], bandpass, obs_m5[le:ri],#[lcpoints_AboveThresh[le:ri]], 
-                                            photparam, gamma=gamma)
-
-                if np.size(mag)>self.ptsNeeded:
-                    total_lc = pd.DataFrame(np.array([epochs[snr>self.snrlim],
-                                            filters[snr>self.snrlim],
-                                            mag[le:ri][snr>self.snrlim],
-                                            merr[snr>self.snrlim],
-                                            flag_det[snr>self.snrlim]]).T, columns=['time','filter', 'mag','merr','flag']).to_csv(self.obs_path+'/obs_{}_'.format(j)+
-                                                                                                              lcname)
+                    if np.size(mag)>self.ptsNeeded:
+                        total_lc = pd.DataFrame(np.array([epochs,#[snr>self.snrlim],
+                                                filters,#[snr>self.snrlim],
+                                                mag[le:ri],#[snr>self.snrlim],
+                                                merr,#[snr>self.snrlim],
+                                                obs_m5[le:ri],#[snr>self.snrlim],
+                                                flag_det]).T, columns=['time','filter', 'mag','merr','m5','flag']).to_csv(self.obs_path+'/obs_{}_'.format(lcN)+
+                                                                                                                  lcname)
         return nobj

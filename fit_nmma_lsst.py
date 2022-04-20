@@ -17,7 +17,7 @@ from nmma.em.utils import getFilteredMag
 
 
 class fit_lc(object):
-        """
+    """
         Class object, observed lightcurve from LSST observing constraints
         Parameters
         ------------
@@ -36,7 +36,7 @@ class fit_lc(object):
         """
     def __init__(self, model_names = ['TrPi2018','Me2017'],data_path = './obs_lc',
                  priors_path = '/Users/fabioragosta/nmma/priors',sample_times=sample_times, 
-                 Ebv_max=0.5724, error_budget=1.0, seed=42,output='./posteriors',
+                 Ebv_max=0.5724, error_budget=0.1, seed=42,output='./posteriors',
                  detection_limit={'u':24,'g':25,'r':25,'i':24,'z':23,'y':22},**kwargs):
         self.model_names = model_names
         self.priors_path = priors_path
@@ -86,25 +86,26 @@ class fit_lc(object):
         if not os.path.exists(self.output):
             os.mkdir('./posteriors')
             
-    def load_Event(self, filename):
-    lines = [line.rstrip("\n") for line in open(filename)]
-    lines = filter(None, lines)
-    data = {}
-    for i,line in enumerate(lines):
-        if i==0:
-            continue
-        lineSplit = line.split(",")
-        lineSplit = list(filter(None, lineSplit))
-        mjd = Time(float(lineSplit[1]), format='jd').mjd
-        filt = lineSplit[4]
-        mag = float(lineSplit[2])
-        dmag = float(lineSplit[3])
-
-        if filt not in data:
-            data[filt] = np.empty((0, 3), float)
-        data[filt] = np.append(data[filt], np.array([[mjd, mag, dmag]]), axis=0)
-    return data    
-
+    def load_Event(self,filename):
+        lines = [line.rstrip("\n") for line in open(filename)]
+        lines = filter(None, lines)
+        data = {}
+        for i,line in enumerate(lines):
+            if i==0:
+                continue
+            lineSplit = line.split(",")
+            lineSplit = list(filter(None, lineSplit))
+            mjd = Time(float(lineSplit[1]), format='jd').mjd
+            filt = lineSplit[2]
+            mag = float(lineSplit[3])
+            dmag = float(lineSplit[4])
+            flag=float(lineSplit[-1])
+            if filt not in data:
+                data[filt] = np.empty((0, 3), float)
+            if flag==1:
+                data[filt] = np.append(data[filt], np.array([[mjd, mag, dmag]]), axis=0)
+        return data
+                    
     def fit(self):
         datalist = glob.glob(self.data_path+'/*')
         for datafile in datalist:
@@ -133,5 +134,5 @@ class fit_lc(object):
                 label=filename,
                 seed=self.seed
                 )
-            result.save_posterior_samples(filename='prior_'+filename+'.dat')
+            result.save_posterior_samples(filename='posteriors_'+filename+'.dat')
         return print('fit completes!')

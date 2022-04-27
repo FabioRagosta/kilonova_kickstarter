@@ -79,7 +79,7 @@ class fit_lc(object):
         models.append(lc_model)    
         
         if len(models) > 1:
-            self.light_curve_model = GenericCombineLightCurveModel(models_name, sample_times)
+            self.light_curve_model = GenericCombineLightCurveModel(models, sample_times)
         else:
             self.light_curve_model = models[0]
             
